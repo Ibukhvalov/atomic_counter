@@ -11,4 +11,4 @@ There is also an implementation without bits for internal usage but it is only l
 
 Function signatures is a bit differ from the given ones, since it is much more convenient to use std::atomic<uint32_t>, but it could be refactored using some casts or even raw c-style atomic calls
 
-Also, there is an assumption, that neither of threads would be waiting more than the 2^(lowerAccumulatorBits-1) or it would yield wrong fetched result since phase (reserved) bit is responsible for that specific range and flips on overflow.
+Also, there is an assumption, that neither of threads would be waiting more than the 2^(lowerAccumulatorBits-1) increments or it would yield wrong fetched result since phase (reserved) bit is responsible for that specific range and flips on overflow.
