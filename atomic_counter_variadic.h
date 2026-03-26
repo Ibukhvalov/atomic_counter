@@ -15,7 +15,8 @@ constexpr std::uint64_t bit_mask(unsigned bits) noexcept {
 }
 
 template <typename T>
-constexpr bool is_valid_word = std::is_integral_v<T> && std::is_unsigned_v<T> && !std::is_same_v<T, bool>;
+constexpr bool is_valid_word =
+    std::is_integral_v<T> && std::is_unsigned_v<T> && !std::is_same_v<T, bool>;
 
 template <typename T>
 constexpr unsigned word_bits = std::numeric_limits<T>::digits;
@@ -31,6 +32,7 @@ class counter<T> {
 
  public:
   static constexpr unsigned total_bits = word_bits<T>;
+  static constexpr std::uint64_t minValue = 0;
   static constexpr std::uint64_t maxValue = bit_mask(total_bits);
 
   explicit counter(std::atomic<T>& word) noexcept : word_(word) {}
@@ -41,8 +43,7 @@ class counter<T> {
   }
 
   std::uint64_t fetch_add() noexcept {
-    return static_cast<std::uint64_t>(
-        word_.fetch_add(T{1}, std::memory_order_acq_rel));
+    return static_cast<std::uint64_t>(word_.fetch_add(T{1}, std::memory_order_acq_rel));
   }
 
  private:
@@ -74,6 +75,7 @@ class counter<Low, HighTs...> {
   static constexpr std::uint64_t low_significant_mask = bit_mask(low_significant_bits);
   static constexpr unsigned total_bits = low_significant_bits + high_counter::total_bits;
   static_assert(total_bits <= 64, "counter must fit into uint64_t");
+  static constexpr std::uint64_t minValue = 0;
   static constexpr std::uint64_t maxValue = bit_mask(total_bits);
 
   explicit counter(std::atomic<Low>& low, std::atomic<HighTs>&... high_words) noexcept
@@ -83,11 +85,11 @@ class counter<Low, HighTs...> {
     assert(newValue <= maxValue);
 
     const std::uint64_t high_value = newValue >> low_significant_bits;
-    const auto low_payload = static_cast<Low>(newValue & low_significant_mask);
+    const auto low_significant = static_cast<Low>(newValue & low_significant_mask);
     const auto phase = static_cast<Low>((high_value & 1ULL) << low_significant_bits);
 
     high_.reset(high_value);
-    low_.store(static_cast<Low>(low_payload | phase), std::memory_order_relaxed);
+    low_.store(static_cast<Low>(low_significant | phase), std::memory_order_relaxed);
   }
 
   std::uint64_t fetch_add() noexcept {
@@ -109,8 +111,7 @@ class counter<Low, HighTs...> {
  private:
   std::uint64_t load() const noexcept {
     const std::uint64_t high_before = high_.load();
-    const auto low_now =
-        static_cast<std::uint64_t>(low_.load(std::memory_order_acquire));
+    const auto low_now = static_cast<std::uint64_t>(low_.load(std::memory_order_acquire));
     const std::uint64_t phase = low_now >> low_significant_bits;
     const std::uint64_t high_corrected =
         high_before + static_cast<std::uint64_t>((high_before & 1ULL) != phase);
@@ -119,8 +120,8 @@ class counter<Low, HighTs...> {
   }
 
   void bump() noexcept {
-    const std::uint64_t old_low = static_cast<std::uint64_t>(
-        low_.fetch_add(Low{1}, std::memory_order_acq_rel));
+    const std::uint64_t old_low =
+        static_cast<std::uint64_t>(low_.fetch_add(Low{1}, std::memory_order_acq_rel));
 
     if ((old_low & low_significant_mask) == low_significant_mask) {
       high_.bump();

@@ -1,4 +1,4 @@
-#include "atomic_counter.h"
+#include "atomic_counter_variadic.h"
 
 #include <algorithm>
 #include <atomic>
