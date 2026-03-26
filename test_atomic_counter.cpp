@@ -10,31 +10,57 @@
 
 namespace {
 
-void test_sequential_zero() {
-  std::atomic<std::uint32_t> low{0};
-  std::atomic<std::uint32_t> high{0};
+void test_single_word() {
+  std::atomic<std::uint32_t> word{0};
+  atomic_counter::counter c(word);
 
   for (std::uint64_t i = 0; i != 100000; ++i) {
-    assert(atomic_counter::fetch_add(low, high) == i);
+    assert(c.fetch_add() == i);
   }
 }
 
-void test_boundary() {
-  std::uint32_t high_bits = 10;
-  std::uint32_t low_bits = atomic_counter::detail::kLowMask - 2;
-  std::atomic<std::uint32_t> high{high_bits};
-  std::atomic<std::uint32_t> low{low_bits | ((high_bits & 1U) << 31)};
+void test_two_words_boundary() {
+  std::atomic<std::uint32_t> low{0};
+  std::atomic<std::uint32_t> high{0};
+  atomic_counter::counter c(low, high);
+  c.reset((std::uint64_t{10} << 31) | (std::uint64_t{1} << 31) - 2);
 
-  const std::uint64_t base = (static_cast<std::uint64_t>(high_bits) << 31) | low_bits;
-  assert(atomic_counter::fetch_add(low, high) == base);
-  assert(atomic_counter::fetch_add(low, high) == base + 1);
-  assert(atomic_counter::fetch_add(low, high) == base + 2);
-  assert(atomic_counter::fetch_add(low, high) == base + 3);
+  const std::uint64_t base = (std::uint64_t{10} << 31) | ((std::uint64_t{1} << 31) - 2);
+  assert(c.fetch_add() == base);
+  assert(c.fetch_add() == base + 1);
+  assert(c.fetch_add() == base + 2);
+  assert(c.fetch_add() == base + 3);
+}
+
+void test_variadic_reset() {
+  std::atomic<std::uint16_t> low{0};
+  std::atomic<std::uint32_t> high{0};
+  atomic_counter::counter c(low, high);
+  c.reset(255);
+  assert(c.fetch_add() == 255);
+  assert(c.fetch_add() == 256);
+}
+
+void test_three_words_boundary() {
+  std::atomic<std::uint16_t> a{0};
+  std::atomic<std::uint16_t> b{0};
+  std::atomic<std::uint32_t> c_word{0};
+  atomic_counter::counter c(a, b, c_word);
+  constexpr std::uint64_t low_base = (std::uint64_t{1} << 15);
+  constexpr std::uint64_t middle_base = (std::uint64_t{1} << 30);
+  const std::uint64_t start = middle_base - 2;
+  c.reset(start);
+  assert(c.fetch_add() == start);
+  assert(c.fetch_add() == start + 1);
+  assert(c.fetch_add() == start + 2);
+  assert(c.fetch_add() == start + 3);
+  (void)low_base;
 }
 
 void test_multithreaded_uniqueness() {
-  std::atomic<std::uint32_t> low{0};
+  std::atomic<std::uint16_t> low{0};
   std::atomic<std::uint32_t> high{0};
+  atomic_counter::counter c(low, high);
 
   constexpr int kThreads = 4;
   constexpr int kPerThread = 50000;
@@ -46,8 +72,7 @@ void test_multithreaded_uniqueness() {
   for (int t = 0; t != kThreads; ++t) {
     threads.emplace_back([&, t] {
       for (int i = 0; i != kPerThread; ++i) {
-        values[static_cast<std::size_t>(t) * kPerThread + i] =
-            atomic_counter::fetch_add(low, high);
+        values[static_cast<std::size_t>(t) * kPerThread + i] = c.fetch_add();
       }
     });
   }
@@ -65,8 +90,14 @@ void test_multithreaded_uniqueness() {
 }  // namespace
 
 int main() {
-  test_sequential_zero();
-  test_boundary();
+  static_assert(
+      atomic_counter::counter<std::uint16_t, std::uint32_t>::maxValue ==
+      ((std::uint64_t{1} << 47) - 1));
+
+  test_single_word();
+  test_two_words_boundary();
+  test_variadic_reset();
+  test_three_words_boundary();
   test_multithreaded_uniqueness();
   std::cout << "ok\n";
 }
