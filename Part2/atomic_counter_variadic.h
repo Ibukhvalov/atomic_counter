@@ -32,13 +32,12 @@ class counter<T> {
 
  public:
   static constexpr unsigned total_bits = word_bits<T>;
-  static constexpr std::uint64_t minValue = 0;
-  static constexpr std::uint64_t maxValue = bit_mask(total_bits);
 
   explicit counter(std::atomic<T>& word) noexcept : word_(word) {}
 
   void reset(std::uint64_t newValue = 0) noexcept {
-    assert(newValue <= maxValue);
+    static constexpr std::uint64_t max_value = bit_mask(total_bits);
+    assert(newValue <= max_value);
     word_.store(static_cast<T>(newValue), std::memory_order_relaxed);
   }
 
@@ -75,14 +74,13 @@ class counter<Low, HighTs...> {
   static constexpr std::uint64_t low_significant_mask = bit_mask(low_significant_bits);
   static constexpr unsigned total_bits = low_significant_bits + high_counter::total_bits;
   static_assert(total_bits <= 64, "counter must fit into uint64_t");
-  static constexpr std::uint64_t minValue = 0;
-  static constexpr std::uint64_t maxValue = bit_mask(total_bits);
 
   explicit counter(std::atomic<Low>& low, std::atomic<HighTs>&... high_words) noexcept
       : low_(low), high_(high_words...) {}
 
   void reset(std::uint64_t newValue = 0) noexcept {
-    assert(newValue <= maxValue);
+    static constexpr std::uint64_t max_value = bit_mask(total_bits);
+    assert(newValue <= max_value);
 
     const std::uint64_t high_value = newValue >> low_significant_bits;
     const auto low_significant = static_cast<Low>(newValue & low_significant_mask);
