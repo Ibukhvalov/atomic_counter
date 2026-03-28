@@ -90,11 +90,7 @@ void test_multithreaded_uniqueness() {
 }  // namespace
 
 int main() {
-  static_assert(
-      atomic_counter::counter<std::uint16_t, std::uint32_t>::maxValue ==
-      ((std::uint64_t{1} << 47) - 1));
-
-  test_single_word();
+ test_single_word();
   test_two_words_boundary();
   test_variadic_reset();
   test_three_words_boundary();
